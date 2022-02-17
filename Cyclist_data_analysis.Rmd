@@ -1,0 +1,211 @@
+---
+title: "Cyclist_analytics"
+author: "Kondapudi Santhosh Kumar"
+date: "15/02/2022"
+output: 
+  pdf_document:
+    fig_width: 9
+    fig_height: 6
+    
+---
+
+
+# Analysis Summary(Part of Google Data Analytics Certification)
+
+* From this analysis The people Who subscribed for **Annual membership** are more benificial than casual riders.
+
+* Major amount of riders booked by their Annual membership than normal
+
+* Finally, **Average duration per ride** for a casual rider is almost **three times** of mean of   ride duration for annual member every day.
+
+# Task Performed
+
+Cyclistic marketing team needs to design marketing strategy to convert casual riders into annual members as it is believed that maximizing the number of annual members will be the key to future growth.
+
+# Source of Data
+
+* The cyclistic data is an open source data, that can be accessed from the link <https://divvy-tripdata.s3.amazonaws.com/index.html> provided by the Coursera platform.
+* From the Abundance Quantity of data I had chosen the **Past 12 months Data**
+* Every month Data Contains **13 Variables**
+*Data is reliable, original, comprehensive, cited and current.
+
+# Cleaning and Transforming Data
+
+* Merged all the 12 months data in to a Single Data frame.
+* Removed the Nulls and Empty cells from the Data Frame.
+* Also Removed Some attributes To create new reliable dataset.
+
+# Here goes the data analysis
+
+# Firstly loading the downloaded libraries of R
+```{r setup, include=FALSE,echo=FALSE,error=FALSE,message=FALSE}
+knitr::opts_chunk$set(echo = FALSE,message = FALSE,error = FALSE)
+library(tidyverse)
+library(janitor)
+library(lubridate)
+library(scales)
+library(ggplot2)
+library(xtable)
+library(forecast)
+library(knitr)
+rm(list = ls())
+```
+
+# Importing the last one year data(12 months Data)
+```{r}
+df1 <- read.csv("202004-divvy-tripdata.csv.csv")
+df2 <- read.csv("202005-divvy-tripdata.csv.csv")
+df3 <- read.csv("202006-divvy-tripdata.csv.csv")
+df4 <- read.csv("202008-divvy-tripdata.csv.csv")
+df5 <- read.csv("202009-divvy-tripdata.csv.csv")
+df6 <- read.csv("202010-divvy-tripdata.csv")
+df7 <- read.csv("202011-divvy-tripdata.csv")
+df8 <- read.csv("202012-divvy-tripdata.csv")
+df9 <- read.csv("202101-divvy-tripdata.csv")
+df10 <- read.csv("202102-divvy-tripdata.csv")
+df11 <- read.csv("202103-divvy-tripdata.csv")
+df12 <- read.csv("202104-divvy-tripdata.csv")
+
+```
+
+# Combining all the 12 Months Data into a Single Dataframe named "bike_rides"
+```{r}
+bike_rides <- rbind(df1,df2,df3,df4,df5,df6,df7,df8,df9,df10,df11,df12)
+```
+
+# Once the Primary dataset is ready,The Cleaning process will begins...
+
+# Removing the empty Rows and Columns from the Dataframe
+```{r}
+bike_rides <- janitor::remove_empty(bike_rides,which = c("cols"))
+bike_rides <- janitor::remove_empty(bike_rides,which = c("rows"))
+bike_rides <- bike_rides %>% filter(start_station_name !="")
+```
+
+# Filtering the Date,time and Creating the Useful Data
+```{r}
+bike_rides$Ymd <- as.Date(bike_rides$started_at)
+bike_rides$started_at <- lubridate::ymd_hms(bike_rides$started_at)
+bike_rides$ended_at <- lubridate::ymd_hms(bike_rides$ended_at)
+```
+
+# Creating the Starting and Ending time
+```{r}
+
+bike_rides$start_hour <- lubridate::hour(bike_rides$started_at)
+bike_rides$end_hour <- lubridate::hour(bike_rides$ended_at)
+```
+
+# Converting the Hours time into Minutes
+```{r}
+bike_rides$Minutes <- difftime(bike_rides$ended_at,bike_rides$started_at,units = c("mins"))
+bike_rides$Hours <- difftime(bike_rides$ended_at,bike_rides$started_at,units = c("hours"))
+bike_rides <- bike_rides %>% filter(Minutes >0)
+```
+
+# Creating the second Dataframe with Required attributes
+```{r}
+
+bike_rides2 <- bike_rides %>% group_by(weekly= floor_date(Ymd,"week"),start_hour) %>%
+  summarise(
+    
+    Minutes = sum(Minutes),
+    Mean = mean(Minutes),
+    median = median(Minutes),
+    Max = max(Minutes),
+    Min = min(Minutes),
+    Count = n()
+  ) %>% ungroup()
+bike_rides2$CntMA <- forecast::ma(bike_rides2$Count,28)
+```
+
+```{r}
+summary(bike_rides2$Count)
+```
+
+```{r}
+xtabs(bike_rides2$Count~bike_rides2$start_hour)
+```
+
+# Visualizing to Gain more insight
+
+# Plotting Bargraph for the Top 10 Stations based on Riders count
+```{r}
+bike_rides %>% count(start_station_name,sort = TRUE)%>%
+  top_n(10) %>% ggplot()+geom_col(aes(x=reorder(start_station_name,n),y=n))+
+  coord_flip()+labs(title = "Top 10 Start stations",y="Station name",x="Number of Rides")+ scale_y_continuous(labels=comma)
+```
+
+
+
+# Plotting The Riders count per Hour
+```{r}
+bike_rides2 %>%
+  ggplot()+ geom_col (aes(x=start_hour,y=Count))+scale_y_continuous(labels = comma)+
+  labs(title = "Number of bike rides per hours",y="Rides per hour")
+```
+
+# Creating the another Dataframe With required filtered attriutes
+```{r}
+bikestype <- bike_rides %>% group_by(member_casual,rideable_type,Weekly = floor_date(Ymd,"week"))%>%
+summarise(
+  Minutes=sum(Minutes),
+  Mean = mean(Minutes),
+  median = median(Minutes),
+  Max = max(Minutes),
+  Min = min(Minutes),
+  Count = n()
+) %>% ungroup()
+```
+
+
+# Plotting the Graph for Rides count depending on BikeType
+```{r}
+ggplot(bikestype)+ geom_area(aes(x=Weekly,y=Count,fill=rideable_type))+
+  scale_y_continuous(labels = comma)+
+  labs(title="count of rides Depending on BikeType",subtitle = "(For the year 2020-2021 of April)")
+```
+
+# Plotting Rides count depending on BikeType
+```{r}
+ggplot(bikestype)+ geom_area(aes(x=Weekly,y=Count,col=rideable_type))+
+  scale_y_continuous(labels = comma)+
+  labs(title="count of rides Depending on BikeType")
+```
+
+# Plot to show the Rides Count depends on RiderType
+```{r}
+ggplot(bikestype)+ geom_col(aes(x=Weekly,y=Count,fill=member_casual))+
+  scale_y_continuous(labels = comma)+
+  labs(title="count of rides Depending on RiderType")
+```
+
+# Visualizing Total Rides time in a Week
+```{r}
+ggplot(bikestype)+ geom_col(aes(x=Weekly,y=Minutes))+
+  scale_y_continuous(labels = comma)+facet_wrap(~rideable_type)+
+  labs(title="Total Rided time In a Week(Minutes)")
+```
+
+# Plotting the time and biketype of a Ride for an One Week
+```{r}
+ggplot(bikestype,aes(x=Weekly,y=Count,fill=member_casual))+
+  geom_area(start = "Identity",position = position_dodge(),alpha=0.75)+
+  labs(title="Time rided by bike type and Week",y="Time of BikeTrip")
+```
+
+### Analysis and Observations :
+
+-   Casual users have a higher avg of ride length service members
+-   The density plot shows that most riders for both members and casual riders usually use the service for less than 10 mins on average
+-   The members seem to be utilizing the service consistently through out the week while the casual users utilize it more on the weekends
+
+# ACT and Recommendation Step
+
+based on the observations from the data we can conclude the following:
+
+-   The marketing campaign should focus on the list of members with the 5 - 10 mins ride times and further deep dive into their habits
+-   perhaps some promotions for extending the their rides to have more time using the service
+-   Weekend centric promotions or service discounts for during week non members
+
+further deeper analysis should be done to understand the location and route behavior the user take , that can lead to more thoughtful insights on the station placement.
